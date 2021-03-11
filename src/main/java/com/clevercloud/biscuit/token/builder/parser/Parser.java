@@ -9,32 +9,39 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.clevercloud.biscuit.token.builder.Utils.s;
-import static com.clevercloud.biscuit.token.builder.Utils.var;
+import static com.clevercloud.biscuit.token.builder.Utils.*;
 
 public class Parser {
-    public static Either<Error, Tuple2<String, Fact>> fact(String s) {
-        Either<Error, Tuple2<String, Predicate>> res = predicate(s);
+    public static Either<Error, Tuple2<Integer, Fact>> fact(String s){
+        return fact(s,0);
+    }
+
+    public static Either<Error, Tuple2<Integer, Fact>> fact(String s, int offset) {
+        Either<Error, Tuple2<Integer, Predicate>> res = predicate(s);
         if (res.isLeft()) {
             return Either.left(res.getLeft());
         } else {
-            Tuple2<String, Predicate> t = res.get();
+            Tuple2<Integer, Predicate> t = res.get();
             return Either.right(new Tuple2<>(t._1, new Fact(t._2)));
         }
     }
 
-    public static Either<Error, Tuple2<String, Rule>> rule(String s) {
-        Either<Error, Tuple2<String, Predicate>> res0 = predicate(s);
+    public static Either<Error, Tuple2<Integer, Rule>> rule(String s) {
+        return rule(s,0);
+    }
+
+    public static Either<Error, Tuple2<Integer, Rule>> rule(String s, int offset) {
+        Either<Error, Tuple2<Integer, Predicate>> res0 = predicate(s, offset);
         if (res0.isLeft()) {
             return Either.left(res0.getLeft());
         }
 
-        Tuple2<String, Predicate> t0 = res0.get();
-        s = t0._1;
+        Tuple2<Integer, Predicate> t0 = res0.get();
+        int startIndex = t0._1;
         Predicate head = t0._2;
 
         int index2 = s.length();
-        for (int i = 0; i < s.length(); i++) {
+        for (int i = startIndex; i < s.length(); i++) {
             char c = s.charAt(i);
             if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
                 index2 = i;
@@ -42,33 +49,36 @@ public class Parser {
             }
         }
         if (index2 == s.length() || s.charAt(index2) != '<' || s.charAt(index2+1) != '-') {
-            return Either.left(new Error(s, "rule arrow not found"));
+            return Either.left(new Error(s.substring(startIndex), "rule arrow not found"));
         }
 
         List<Predicate> predicates = new ArrayList<Predicate>();
-        s = s.substring(index2+2);
+        startIndex = index2+2;
+        int endIndex = s.length();
+        //s = s.substring(index2+2);
         while(true) {
-            int index_loop = s.length();
-            for (int i = 0; i < s.length(); i++) {
+            int index_loop = endIndex;
+            for (int i = startIndex; i < endIndex; i++) {
                 char c = s.charAt(i);
                 if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
                     index_loop = i;
                     break;
                 }
             }
-            s = s.substring(index_loop);
+            startIndex = index_loop;
+            //s = s.substring(index_loop);
 
-            Either<Error, Tuple2<String, Predicate>> res = predicate(s);
+            Either<Error, Tuple2<Integer, Predicate>> res = predicate(s, startIndex);
             if (res.isLeft()) {
                 break;
             }
 
-            Tuple2<String, Predicate> t = res.get();
-            s = t._1;
+            Tuple2<Integer, Predicate> t = res.get();
+            startIndex = t._1;
             predicates.add(t._2);
 
-            index_loop = s.length();
-            for (int i = 0; i < s.length(); i++) {
+            index_loop = endIndex;
+            for (int i = startIndex; i < endIndex; i++) {
                 char c = s.charAt(i);
                 if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
                     index_loop = i;
@@ -76,31 +86,37 @@ public class Parser {
                 }
             }
             
-            if(index_loop == s.length() || s.charAt(index_loop) != ',') {
-                s = s.substring(index_loop);
+            if(index_loop == endIndex || s.charAt(index_loop) != ',') {
+                //s = s.substring(index_loop);
+                startIndex = index_loop;
                 break;
             } else {
-                s = s.substring(index_loop + 1);
+                startIndex = index_loop + 1;
+                //s = s.substring(index_loop + 1);
             }
         }
 
         //FIXME: handle constraints
 
-        return Either.right(new Tuple2<>(s, Utils.rule(head.getName(), head.getIds(), predicates)));
+        return Either.right(new Tuple2<>(startIndex, Utils.rule(head.getName(), head.getIds(), predicates)));
     }
 
-    public static Either<Error, Tuple2<String, Check>> check(String s) {
+    public static Either<Error, Tuple2<Integer, Check>> check(String s) {
         return Either.left(new Error(s, "unimplemented"));
     }
 
-    public static Either<Error, Tuple2<String, Predicate>> predicate(String s) {
+    public static Either<Error, Tuple2<Integer, Predicate>> predicate(String s){
+        return predicate(s,0);
+    }
+
+    public static Either<Error, Tuple2<Integer, Predicate>> predicate(String s, int offset) {
         int index = s.length();
-        for (int i = 0; i < s.length(); i++) {
+        for (int i = offset; i < s.length(); i++) {
             char c = s.charAt(i);
 
             if (!(Character.isAlphabetic(c) || c == '_')) {
-                if (i == 0) {
-                    return Either.left(new Error(s, "empty name"));
+                if (i == offset) {
+                    return Either.left(new Error(s.substring(offset), "empty name"));
                 } else {
                     index = i;
                     break;
@@ -109,10 +125,10 @@ public class Parser {
         }
 
         if (index == s.length()) {
-            return Either.left(new Error(s, "end of name not found"));
+            return Either.left(new Error(s.substring(offset), "end of name not found"));
         }
 
-        String name = s.substring(0, index);
+        String name = s.substring(offset, index);
 
         int index2 = s.length();
         for (int i = index; i < s.length(); i++) {
@@ -123,33 +139,35 @@ public class Parser {
             }
         }
         if (index2 == s.length() || s.charAt(index2) != '(') {
-            return Either.left(new Error(s, "opening parens not found"));
+            return Either.left(new Error(s.substring(offset), "opening parens not found"));
         }
 
         List<Term> terms = new ArrayList<Term>();
-        s = s.substring(index2+1);
+        int startIndex = index2+1;
+        // s = s.substring(index2+1);
         while(true) {
             int index_loop = s.length();
-            for (int i = 0; i < s.length(); i++) {
+            for (int i = startIndex; i < s.length(); i++) {
                 char c = s.charAt(i);
                 if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
                     index_loop = i;
                     break;
                 }
             }
-            s = s.substring(index_loop);
+            startIndex = index_loop;
+            //s = s.substring(index_loop);
 
-            Either<Error, Tuple2<String, Term>> res = atom(s);
+            Either<Error, Tuple2<Integer, Term>> res = atom(s, startIndex);
             if (res.isLeft()) {
                 break;
             }
 
-            Tuple2<String, Term> t = res.get();
-            s = t._1;
+            Tuple2<Integer, Term> t = res.get();
+            startIndex = t._1;
             terms.add(t._2);
 
             index_loop = s.length();
-            for (int i = 0; i < s.length(); i++) {
+            for (int i = startIndex; i < s.length(); i++) {
                 char c = s.charAt(i);
                 if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
                     index_loop = i;
@@ -157,31 +175,36 @@ public class Parser {
                 }
             }
             if(s.charAt(index_loop) != ',') {
-                s = s.substring(index_loop);
+                startIndex = index_loop;
+                // s = s.substring(index_loop);
                 break;
             } else {
-                s = s.substring(index_loop + 1);
+                startIndex = index_loop + 1;
+                // s = s.substring(index_loop + 1);
             }
         }
 
-        index = s.length();
-        for (int i = 0; i < s.length(); i++) {
+        int index3 = s.length();
+        for (int i = startIndex; i < s.length(); i++) {
             char c = s.charAt(i);
             if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
-                index = i;
+                index3 = i;
                 break;
             }
         }
 
-        if (index == s.length() || s.charAt(index) != ')') {
-            return Either.left(new Error(s, "closing parens not found"));
+        if (index3 == s.length() || s.charAt(index3) != ')') {
+            return Either.left(new Error(s.substring(startIndex), "closing parens not found"));
         }
 
-        String remaining = s.substring(index+1);
-        return Either.right(new Tuple2<String, Predicate>(remaining, new Predicate(name, terms)));
+        return Either.right(new Tuple2<Integer, Predicate>(index3 + 1, new Predicate(name, terms)));
     }
 
-    public static Either<Error, Tuple2<String, String>> name(String s) {
+    public static Either<Error, Tuple2<Integer, String>> name(String s) {
+        return name(s,0);
+    }
+
+    public static Either<Error, Tuple2<Integer, String>> name(String s, int offset) {
         int index = s.length();
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
@@ -196,51 +219,55 @@ public class Parser {
             return Either.left(new Error(s, "empty name"));
         }
         String name = s.substring(0, index);
-        String remaining = s.substring(index);
-        return Either.right(new Tuple2<String, String>(remaining, name));
+        return Either.right(new Tuple2<Integer, String>(index, name));
     }
 
-    public static Either<Error, Tuple2<String, Term>> atom(String s) {
-        Either<Error, Tuple2<String, Term.Symbol>> res1 = symbol(s);
+    public static Either<Error, Tuple2<Integer, Term>> atom(String s, int offset) {
+        Either<Error, Tuple2<Integer, Term.Symbol>> res1 = symbol(s, offset);
         if(res1.isRight()) {
-            Tuple2<String, Term.Symbol> t = res1.get();
-            return Either.right(new Tuple2<String, Term>(t._1, t._2));
+            Tuple2<Integer, Term.Symbol> t = res1.get();
+            return Either.right(new Tuple2<Integer, Term>(t._1, t._2));
         }
 
-        Either<Error, Tuple2<String, Term.Str>> res2 = string(s);
+        Either<Error, Tuple2<Integer, Term.Str>> res2 = string(s, offset);
         if(res2.isRight()) {
-            Tuple2<String, Term.Str> t = res2.get();
-            return Either.right(new Tuple2<String, Term>(t._1, t._2));
+            Tuple2<Integer, Term.Str> t = res2.get();
+            return Either.right(new Tuple2<Integer, Term>(t._1, t._2));
         }
 
-        Either<Error, Tuple2<String, Term.Integer>> res3 = integer(s);
+        Either<Error, Tuple2<Integer, Term.Integer>> res3 = integer(s, offset);
         if(res3.isRight()) {
-            Tuple2<String, Term.Integer> t = res3.get();
-            return Either.right(new Tuple2<String, Term>(t._1, t._2));
+            Tuple2<Integer, Term.Integer> t = res3.get();
+            return Either.right(new Tuple2<Integer, Term>(t._1, t._2));
         }
 
-        Either<Error, Tuple2<String, Term.Date>> res4 = date(s);
+        Either<Error, Tuple2<Integer, Term.Date>> res4 = date(s, offset);
         if(res4.isRight()) {
-            Tuple2<String, Term.Date> t = res4.get();
-            return Either.right(new Tuple2<String, Term>(t._1, t._2));
+            Tuple2<Integer, Term.Date> t = res4.get();
+            return Either.right(new Tuple2<Integer, Term>(t._1, t._2));
         }
 
-        Either<Error, Tuple2<String, Term.Variable>> res5 = variable(s);
+        Either<Error, Tuple2<Integer, Term.Variable>> res5 = variable(s, offset);
         if(res5.isRight()) {
-            Tuple2<String, Term.Variable> t = res5.get();
-            return Either.right(new Tuple2<String, Term>(t._1, t._2));
+            Tuple2<Integer, Term.Variable> t = res5.get();
+            return Either.right(new Tuple2<Integer, Term>(t._1, t._2));
         }
 
         return Either.left(new Error(s, "unrecognized value"));
     }
 
-    public static Either<Error, Tuple2<String, Term.Symbol>> symbol(String s) {
-        if(s.charAt(0) !='#') {
+    public static Either<Error, Tuple2<Integer, Term.Symbol>> symbol(String s){
+        return symbol(s,0);
+    }
+
+    public static Either<Error, Tuple2<Integer, Term.Symbol>> symbol(String s, int offset) {
+        if(s.charAt(offset) !='#') {
             return Either.left(new Error(s, "not a symbol"));
         }
+        int secondOffset = offset + 1;
 
         int index = s.length();
-        for (int i = 1; i < s.length(); i++) {
+        for (int i = secondOffset; i < s.length(); i++) {
             char c = s.charAt(i);
 
             if (!(Character.isAlphabetic(c) && c != '_')) {
@@ -249,21 +276,24 @@ public class Parser {
             }
         }
 
-        if(index == 1) {
+        if(index == secondOffset) {
             return Either.left(new Error(s, "empty symbol"));
         }
-        String name = s.substring(1, index);
-        String remaining = s.substring(index);
-        return Either.right(new Tuple2<String, Term.Symbol>(remaining, (Term.Symbol) s(name)));
+        String name = s.substring(secondOffset, index);
+        return Either.right(new Tuple2<Integer, Term.Symbol>(index, (Term.Symbol) s(name)));
     }
 
-    public static Either<Error, Tuple2<String, Term.Str>> string(String s) {
-        if(s.charAt(0) !='"') {
-            return Either.left(new Error(s, "not a string"));
+    public static Either<Error, Tuple2<Integer, Term.Str>> string(String s) {
+        return string(s,0);
+    }
+
+    public static Either<Error, Tuple2<Integer, Term.Str>> string(String s, int offset) {
+        if(s.charAt(offset) !='"') {
+            return Either.left(new Error(s.substring(offset), "not a string"));
         }
 
         int index = s.length();
-        for (int i = 1; i < s.length(); i++) {
+        for (int i = offset + 1; i < s.length(); i++) {
             char c = s.charAt(i);
 
             if(c == '\\' && s.charAt(i+1) == '"') {
@@ -285,14 +315,17 @@ public class Parser {
             return Either.left(new Error(s, "ending double quote not found"));
         }
 
-        String string = s.substring(1, index+1);
-        String remaining = s.substring(index+2);
-        return Either.right(new Tuple2<String, Term.Str>(remaining, (Term.Str) Utils.string(string)));
+        String string = s.substring(offset+1, index+1);
+        return Either.right(new Tuple2<Integer, Term.Str>(index +2 , (Term.Str) Utils.string(string)));
     }
 
-    public static Either<Error, Tuple2<String, Term.Integer>> integer(String s) {
-        int index = 0;
-        if(s.charAt(0) == '-') {
+    public static Either<Error, Tuple2<Integer, Term.Integer>> integer(String s) {
+        return integer(s,0);
+    }
+
+    public static Either<Error, Tuple2<Integer, Term.Integer>> integer(String s, int offset) {
+        int index = offset;
+        if(s.charAt(offset) == '-') {
             index += 1;
         }
 
@@ -306,18 +339,21 @@ public class Parser {
             }
         }
 
-        if (index2 == 0) {
+        if (index2 == offset) {
             return Either.left(new Error(s, "not an integer"));
         }
 
-        Integer i = Integer.parseInt(s.substring(0, index2));
-        String remaining = s.substring(index2);
-        return Either.right(new Tuple2<String, Term.Integer>(remaining, (Term.Integer) Utils.integer(i.intValue())));
+        Integer i = Integer.parseInt(s.substring(offset, index2));
+        return Either.right(new Tuple2<Integer, Term.Integer>(index2, (Term.Integer) Utils.integer(i.intValue())));
     }
 
-    public static Either<Error, Tuple2<String, Term.Date>> date(String s) {
+    public static Either<Error, Tuple2<Integer, Term.Date>> date(String s){
+        return date(s,0);
+    }
+
+    public static Either<Error, Tuple2<Integer, Term.Date>> date(String s, int offset) {
         int index = s.length();
-        for (int i = 0; i < s.length(); i++) {
+        for (int i = offset; i < s.length(); i++) {
             char c = s.charAt(i);
             if (c == ' ' || c == ',' || c == ')') {
                 index = i;
@@ -326,22 +362,25 @@ public class Parser {
         }
 
         try {
-            Instant i = Instant.parse(s.substring(0, index));
-            String remaining = s.substring(index);
-            return Either.right(new Tuple2<String, Term.Date>(remaining, new Term.Date(i.getEpochSecond())));
+            Instant i = Instant.parse(s.substring(offset, index));
+            return Either.right(new Tuple2<Integer, Term.Date>(index, new Term.Date(i.getEpochSecond())));
         } catch (DateTimeParseException e) {
-            return Either.left(new Error(s, "not a date"));
+            return Either.left(new Error(s.substring(offset), "not a date"));
 
         }
     }
 
-    public static Either<Error, Tuple2<String, Term.Variable>> variable(String s) {
-        if(s.charAt(0) !='$') {
-            return Either.left(new Error(s, "not a variable"));
+    public static Either<Error, Tuple2<Integer, Term.Variable>> variable(String s){
+        return variable(s,0);
+    }
+
+    public static Either<Error, Tuple2<Integer, Term.Variable>> variable(String s, int offset) {
+        if(s.charAt(offset) !='$') {
+            return Either.left(new Error(s.substring(offset), "not a variable"));
         }
 
         int index = s.length();
-        for (int i = 1; i < s.length(); i++) {
+        for (int i = offset + 1; i < s.length(); i++) {
             char c = s.charAt(i);
 
             if(!Character.isAlphabetic(c) && !Character.isDigit(c) && c != '_') {
@@ -350,12 +389,19 @@ public class Parser {
             }
         }
 
-        String name = s.substring(1, index);
-        String remaining = s.substring(index);
-        return Either.right(new Tuple2<String, Term.Variable>(remaining, (Term.Variable) var(name)));
+        String name = s.substring(offset + 1, index);
+        return Either.right(new Tuple2<Integer, Term.Variable>(index, (Term.Variable) var(name)));
     }
 
-    public static Either<Error, Tuple2<String, Expression>> expression(String s) {
-        return Either.left(new Error(s, "unimplemented"));
+    //private static Either<Error, Tuple2<Int,>>
+
+
+
+    public static Either<Error, Tuple2<Integer, Expression>> expression(String s) {
+        return expression(s, 0);
+    }
+
+    public static Either<Error, Tuple2<Integer, Expression>> expression(String s, int offset) {
+        return Either.left(new Error(s.substring(offset), "unimplemented"));
     }
 }
