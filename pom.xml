@@ -41,6 +41,8 @@
         <awssdk-kms.version>2.30.2</awssdk-kms.version>
         <testcontainers-junit-jupiter.version>1.20.4</testcontainers-junit-jupiter.version>
         <testcontainers-localstack.version>1.20.4</testcontainers-localstack.version>
+
+        <checkstyle.config.location>checkstyle.xml</checkstyle.config.location>
     </properties>
 
     <licenses>
@@ -259,10 +261,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
-                <version>${maven-checkstyle-plugin.version}</version>
-                <configuration>
-                    <configLocation>checkstyle.xml</configLocation>
-                </configuration>
+                <version>3.6.0</version>
                 <reportSets>
                     <reportSet>
                         <reports>
